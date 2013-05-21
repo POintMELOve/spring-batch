@@ -16,7 +16,7 @@
 
 package org.springframework.batch.core.step.tasklet;
 
-import java.io.File;
+import java.io.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
 
@@ -89,6 +89,56 @@ public class SystemCommandTasklet extends StepExecutionListenerSupport implement
 			@Override
 			public Integer call() throws Exception {
 				Process process = Runtime.getRuntime().exec(command, environmentParams, workingDirectory);
+                final InputStream inputStream = process.getInputStream();
+                final InputStream errorStream = process.getErrorStream();
+                Runnable r1 = new Runnable() {
+
+                    public void run() {
+                        BufferedReader br = null;
+                        try {
+                            if (logger.isInfoEnabled()) {
+                                br = new BufferedReader(new InputStreamReader(inputStream));
+                                for (String read = br.readLine(); read != null; read = br.readLine()) {
+                                    logger.info("Command out - " + read);
+                                }
+                            }
+                        } catch (Exception e) {
+                            logger.error(e.getMessage(), e);
+                        } finally {
+                            try {
+                                if (br != null) {
+                                    br.close();
+                                }
+                            } catch (IOException e1) {
+                                // ignore
+                            }
+                        }
+                    }
+                };
+                Runnable r2 = new Runnable() {
+
+                    public void run() {
+                        BufferedReader br = null;
+                        try {
+                            br = new BufferedReader(new InputStreamReader(errorStream));
+                            for (String read = br.readLine(); read != null; read = br.readLine()) {
+                                logger.error("Command error - " + read);
+                            }
+                        } catch (Exception e) {
+                            logger.error(e.getMessage(), e);
+                        } finally {
+                            try {
+                                if (br != null) {
+                                    br.close();
+                                }
+                            } catch (IOException e1) {
+                                // ignore
+                            }
+                        }
+                    }
+                };
+                r1.run();
+                r2.run();
 				return process.waitFor();
 			}
 
